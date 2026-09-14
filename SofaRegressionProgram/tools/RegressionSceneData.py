@@ -455,7 +455,11 @@ class RegressionSceneData:
                         )
 
                     self.total_error[meca_id] += full_dist
-                    self.error_by_dof[meca_id] += error_by_dof
+                    # The verdict is gated on the worst frame, not a budget
+                    # accumulated over the whole trajectory: otherwise the
+                    # threshold's meaning would depend on how many keyframes
+                    # were sampled.
+                    self.error_by_dof[meca_id] = max(self.error_by_dof[meca_id], error_by_dof)
 
                 frame_step += 1
                 self.nbr_tested_frame += 1

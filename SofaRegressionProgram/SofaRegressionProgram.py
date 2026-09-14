@@ -14,6 +14,7 @@ import Sofa
 import SofaRuntime # importing SofaRuntime will add the py3 loader to the scene loaders
 import tools.RegressionSceneList as RegressionSceneList
 import tools.RegressionWorker as RegressionWorker
+import tools.RegressionHelper as helper
 
 regression_file_extension = ".regression-tests"
 
@@ -34,6 +35,10 @@ class RegressionProgram:
         self.legacy_mode = False
         self.nbr_jobs = RegressionWorker.resolve_nbr_jobs(nbr_jobs)
 
+        if not os.path.isdir(input_folder):
+            helper.writeError(f"--input folder does not exist: {input_folder}")
+            raise FileNotFoundError(f"--input folder does not exist: {input_folder}")
+
         for root, dirs, files in os.walk(input_folder):
             for file in files:
                 if file.endswith(regression_file_extension):
@@ -43,6 +48,9 @@ class RegressionProgram:
 
                     scene_list.process_file()
                     self.scene_sets.append(scene_list)
+
+    def total_nbr_scenes_selected(self):
+        return sum(scene_list.get_nbr_scenes() for scene_list in self.scene_sets)
 
     def nbr_error_in_sets(self):
         nbr_errors = 0
@@ -168,6 +176,13 @@ def make_parser():
         help='If set, will read old format regression files',
         action='store_true'
     )
+    parser.add_argument(
+        "--allow-empty",
+        dest="allow_empty",
+        help='If set, do not fail when --input contains no .regression-tests file or when '
+             '--filter selects zero scenes. Without it, a run that tests nothing is an error.',
+        action='store_true'
+    )
 
     parser.epilog = '''
 Examples:
@@ -188,10 +203,19 @@ if __name__ == '__main__':
 
     # 2- Process file
     if args.input is not None:
-        reg_prog = RegressionProgram(args.input, args.filter, args.progress_bar_is_disabled, args.verbose, args.jobs)
+        try:
+            reg_prog = RegressionProgram(args.input, args.filter, args.progress_bar_is_disabled, args.verbose, args.jobs)
+        except FileNotFoundError as e:
+            sys.exit(f"Error: {e}. Quitting.")
     else:
         parser.print_help()
         exit("Error: Argument is required ! Quitting.")
+
+    if not args.allow_empty and reg_prog.total_nbr_scenes_selected() == 0:
+        sys.exit(
+            f"Error: no scene was selected (no {regression_file_extension} file found under "
+            "--input, or --filter matched nothing). Pass --allow-empty if this is expected. Quitting."
+        )
 
     nbr_scenes = 0
 

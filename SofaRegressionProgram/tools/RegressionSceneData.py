@@ -266,6 +266,8 @@ class RegressionSceneData:
                     "dt": dt,
                     "steps": self.steps,
                     "dump_number_step": self.dump_number_step,
+                    "nbr_meca": nbr_meca,
+                    "meca_names": [meca.name.value for meca in self.meca_objs],
                 }
                 reference_io.write_JSON_reference_file(self.filenames[meca_id], meta, numpy_data[meca_id])
 
@@ -284,6 +286,7 @@ class RegressionSceneData:
             return False
 
         dt = self.root_node.dt.value
+        current_meca_names = [meca.name.value for meca in self.meca_objs]
 
         # Reference data
         keyframes = []  # shared timeline
@@ -367,6 +370,17 @@ class RegressionSceneData:
                             f"Reference dt mismatch for file {self.file_scene_path}, "
                             f"MechanicalObject {meca_id}: reference was written with dt={ref_dt}, "
                             f"current scene uses dt={dt}"
+                        )
+                        self.structural_failure = True
+                        return False
+
+                    ref_meca_names = meta.get("meca_names")
+                    if ref_meca_names != current_meca_names:
+                        helper.writeError(
+                            f"Reference MechanicalObject set mismatch for file {self.file_scene_path}: "
+                            f"reference was written for {ref_meca_names}, current scene has {current_meca_names}. "
+                            f"The scene graph changed the set or order of tested MechanicalObjects: "
+                            f"references must be regenerated."
                         )
                         self.structural_failure = True
                         return False

@@ -68,6 +68,25 @@ class RegressionProgram:
         for scene_list in self.scene_sets:
             scene_list.log_scenes_errors()
 
+    @staticmethod
+    def _find_duplicate_write_targets(tasks):
+        """Return {file_ref_path: [file_scene_path, ...]} for every reference
+        target requested by more than one task.
+
+        file_ref_path is the common prefix of every reference file a scene
+        writes: two tasks sharing it (the same scene line duplicated, or two
+        different .regression-tests files whose reference directories
+        overlap) would write to the same files, sequentially overwriting one
+        with the other or, with -j > 1, corrupting them with an interleaved
+        concurrent write.
+        """
+        scenes_by_ref_path = {}
+        for task in tasks:
+            scene_data = task["scene_data"]
+            scenes_by_ref_path.setdefault(scene_data.file_ref_path, []).append(scene_data.file_scene_path)
+        return {ref_path: scene_paths for ref_path, scene_paths in scenes_by_ref_path.items()
+                if len(scene_paths) > 1}
+
     def run_all_sets(self, mode, description):
         """Run every scene of every set in `mode` ("write" or "compare").
 
@@ -79,6 +98,17 @@ class RegressionProgram:
         for scene_list in self.scene_sets:
             scene_list.legacy_mode = self.legacy_mode
             tasks.extend(scene_list.build_tasks(mode))
+
+        if mode == "write":
+            duplicates = self._find_duplicate_write_targets(tasks)
+            if duplicates:
+                for ref_path, scene_paths in duplicates.items():
+                    helper.writeError(
+                        f"Duplicate reference target '{ref_path}' requested by scenes: {scene_paths}. "
+                        f"Writing references for either would silently overwrite (or, with -j > 1, "
+                        f"corrupt) the other's."
+                    )
+                raise RuntimeError(f"{len(duplicates)} duplicate reference target(s) detected, refusing to write references")
 
         return RegressionWorker.run_scene_tasks(
             tasks,
@@ -240,10 +270,17 @@ if __name__ == '__main__':
         os.dup2(devnull, 1)
         os.close(devnull)
 
-    if args.write_mode:
-        nbr_scenes = reg_prog.write_all_sets_references()
-    else:
-        nbr_scenes = reg_prog.compare_all_sets_references()
+    try:
+        if args.write_mode:
+            nbr_scenes = reg_prog.write_all_sets_references()
+        else:
+            nbr_scenes = reg_prog.compare_all_sets_references()
+    except RuntimeError as e:
+        if args.quiet:
+            sys.stdout.flush()
+            os.dup2(old_fd, 1)
+            os.close(old_fd)
+        sys.exit(f"Error: {e}. Quitting.")
 
     if args.quiet:
         # Restore

@@ -365,6 +365,10 @@ class RegressionSceneData:
         frame_step = 0
         nbr_frames = len(keyframes)
         dt = self.root_node.dt.value
+
+        if nbr_frames != self.steps:
+            helper.writeWarning(f"Number of steps saved in reference file ({nbr_frames}) does not match the number of required steps ({self.steps})")
+
         for step in range(0, self.steps + 1):
             simu_time = dt * step
 

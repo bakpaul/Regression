@@ -441,7 +441,10 @@ class RegressionSceneData:
 
                     # Compute total distance between the 2 sets
                     full_dist = np.linalg.norm(data_diff)
-                    error_by_dof = full_dist / float(data_diff.size)
+                    # RMS error: dividing by sqrt(size) instead of size keeps the
+                    # metric independent of the model size (a fixed epsilon would
+                    # otherwise get easier to pass as the model grows).
+                    error_by_dof = full_dist / np.sqrt(float(data_diff.size))
 
                     if self.verbose:
                         helper.writeLog(

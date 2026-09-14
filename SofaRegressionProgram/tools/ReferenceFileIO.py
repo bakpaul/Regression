@@ -66,24 +66,30 @@ def write_CSV_reference_file(file_path, dof_per_point, num_points, csv_rows):
 
 
 # --------------------------------------------------
-# Helper: write numpy array to JSON
+# Helper: write numpy array to JSON, alongside a metadata header describing
+# the conditions the reference was written under (so staleness can be
+# detected on read instead of comparing against it unconditionally).
 # --------------------------------------------------
-def write_JSON_reference_file(file_path, numpy_data):
+def write_JSON_reference_file(file_path, meta, numpy_data):
+    payload = {"meta": meta, "frames": numpy_data}
     with gzip.open(file_path, 'wb') as write_file:
-        write_file.write(json.dumps(numpy_data, cls=NumpyArrayEncoder).encode('utf-8'))
+        write_file.write(json.dumps(payload, cls=NumpyArrayEncoder).encode('utf-8'))
 
 # --------------------------------------------------
 # Helper: read JSON and convert to numpy array
 # --------------------------------------------------
 def read_JSON_reference_file(file_path):
     with gzip.open(file_path, 'r') as zipfile:
-        decoded_array = json.loads(zipfile.read().decode('utf-8'))
+        payload = json.loads(zipfile.read().decode('utf-8'))
+
+        meta = payload.get("meta", {})
+        frames = payload.get("frames", {})
 
         keyframes = []
-        for key in decoded_array:
+        for key in frames:
             keyframes.append(float(key))
-    
-        return decoded_array, keyframes
+
+        return meta, frames, keyframes
 
 # --------------------------------------------------
 # Helper: read the legacy state reference format

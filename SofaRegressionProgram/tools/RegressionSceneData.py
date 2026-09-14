@@ -31,7 +31,7 @@ class ReplayState(Sofa.Core.Controller):
         self.frame_step = 0
         self.t_sim = 0.0
 
-        self.ref_data, self.keyframes = reference_io.read_JSON_reference_file(state_filename)
+        _, self.ref_data, self.keyframes = reference_io.read_JSON_reference_file(state_filename)
         
         if (self.keyframes[0] == 0.0): # frame 0.0
             tmp_position = np.asarray(self.ref_data[str(self.keyframes[0])])
@@ -261,7 +261,13 @@ class RegressionSceneData:
                 n_points = self.meca_objs[meca_id].position.value.shape[0]
                 reference_io.write_CSV_reference_file(self.filenames[meca_id], dof_per_point, n_points, csv_rows[meca_id])               
             elif format == "JSON":
-                reference_io.write_JSON_reference_file(self.filenames[meca_id], numpy_data[meca_id])
+                meta = {
+                    "format_version": reference_io.regression_version,
+                    "dt": dt,
+                    "steps": self.steps,
+                    "dump_number_step": self.dump_number_step,
+                }
+                reference_io.write_JSON_reference_file(self.filenames[meca_id], meta, numpy_data[meca_id])
 
         Sofa.Simulation.unload(self.root_node)
 
@@ -276,6 +282,8 @@ class RegressionSceneData:
             helper.writeError(f"No MechanicalObject found to test for {self.file_scene_path}")
             self.regression_failed = True
             return False
+
+        dt = self.root_node.dt.value
 
         # Reference data
         keyframes = []  # shared timeline
@@ -340,8 +348,28 @@ class RegressionSceneData:
                             return False
 
                 elif format == "JSON":
-                    decoded_array, decoded_keyframes = reference_io.read_JSON_reference_file(self.filenames[meca_id])
+                    meta, decoded_array, decoded_keyframes = reference_io.read_JSON_reference_file(self.filenames[meca_id])
                     numpy_data.append(decoded_array)
+
+                    ref_format_version = meta.get("format_version")
+                    if ref_format_version != reference_io.regression_version:
+                        helper.writeError(
+                            f"Reference format version mismatch for file {self.file_scene_path}, "
+                            f"MechanicalObject {meca_id}: expected {reference_io.regression_version}, "
+                            f"got {ref_format_version}"
+                        )
+                        self.structural_failure = True
+                        return False
+
+                    ref_dt = meta.get("dt")
+                    if ref_dt is None or not np.isclose(ref_dt, dt):
+                        helper.writeError(
+                            f"Reference dt mismatch for file {self.file_scene_path}, "
+                            f"MechanicalObject {meca_id}: reference was written with dt={ref_dt}, "
+                            f"current scene uses dt={dt}"
+                        )
+                        self.structural_failure = True
+                        return False
 
                     # Keep timeline from first MechanicalObject
                     if meca_id == 0:
@@ -364,7 +392,6 @@ class RegressionSceneData:
         # --------------------------------------------------
         frame_step = 0
         nbr_frames = len(keyframes)
-        dt = self.root_node.dt.value
 
         if nbr_frames != self.steps:
             helper.writeWarning(f"Number of steps saved in reference file ({nbr_frames}) does not match the number of required steps ({self.steps})")

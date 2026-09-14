@@ -413,8 +413,10 @@ class RegressionSceneData:
         for step in range(0, self.steps + 1):
             simu_time = dt * step
 
-            # Use tolerance for float comparison
-            if frame_step < nbr_frames and np.isclose(simu_time, keyframes[frame_step]):
+            # Absolute, dt-scaled tolerance: np.isclose's default rtol grows with
+            # simu_time and can end up wider than dt on long-running scenes,
+            # locking the match onto the wrong step for the rest of the run.
+            if frame_step < nbr_frames and abs(simu_time - keyframes[frame_step]) < dt / 2:
                 for meca_id in range(nbr_meca):
                     meca_dofs = np.copy(self.meca_objs[meca_id].position.value)
 
@@ -549,8 +551,9 @@ class RegressionSceneData:
         for step in range(0, self.steps + 1):
             simu_time = dt * step
 
-            # Use tolerance for float comparison
-            if frame_step < nbr_frames and np.isclose(simu_time, ref_times[frame_step]):
+            # Absolute, dt-scaled tolerance: see compare_references for why
+            # np.isclose's relative tolerance is unsafe here.
+            if frame_step < nbr_frames and abs(simu_time - ref_times[frame_step]) < dt / 2:
                 for meca_id in range(nbr_meca):
                     meca_dofs = np.copy(self.meca_objs[meca_id].position.value)
                     data_ref = ref_values[meca_id][frame_step]

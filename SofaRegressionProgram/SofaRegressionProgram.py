@@ -261,11 +261,11 @@ if __name__ == '__main__':
         # Those scenes have not been processed at all: report them as an error
         # so that an invalid list file cannot silently reduce the test coverage.
         print ("### Number of invalid lines skipped:  " + str(nbr_parsing_errors))
+    print ("### Number of scenes failed:  " + str(reg_prog.nbr_error_in_sets()))
     if args.write_mode is False:
-        print ("### Number of scenes failed:  " + str(reg_prog.nbr_error_in_sets()))
         reg_prog.log_errors_in_sets()
-        if reg_prog.nbr_error_in_sets() > 0:
-            sys.exit(1) # exit with error(s)
+    if reg_prog.nbr_error_in_sets() > 0:
+        sys.exit(1) # exit with error(s)
 
     if nbr_parsing_errors > 0:
         sys.exit(1) # exit with error(s)

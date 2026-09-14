@@ -261,6 +261,7 @@ def _worker_main():
     args = _make_worker_parser().parse_args()
 
     result = {"ok": False, "error": None}
+    scene = None
     try:
         # SOFA and the tools package must be imported inside this fresh process.
         if "SOFA_ROOT" not in os.environ:
@@ -315,6 +316,11 @@ def _worker_main():
     except Exception as e:
         import traceback
         result = {"ok": False, "error": str(e), "traceback": traceback.format_exc()}
+        if args.mode == "write" and scene is not None:
+            # A failed write must not leave a stale reference in place: a later
+            # compare run would silently succeed against out-of-date data.
+            for filename in scene.filenames:
+                _safe_remove(filename)
     finally:
         try:
             with open(args.result_file, "w") as f:

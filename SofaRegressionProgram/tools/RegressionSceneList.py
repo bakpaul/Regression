@@ -226,6 +226,7 @@ class RegressionSceneList:
 
         if task["mode"] == "write":
             if not result.get("ok", False):
+                self.nbr_errors = self.nbr_errors + 1
                 helper.writeError(f"While writing references for {scene.file_scene_path}: {result.get('error')}")
             return
 

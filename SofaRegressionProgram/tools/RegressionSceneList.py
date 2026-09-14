@@ -1,4 +1,5 @@
 import os
+import math
 import tools.RegressionSceneData as RegressionSceneData
 import tools.RegressionHelper as helper
 import tools.RegressionWorker as RegressionWorker
@@ -99,8 +100,8 @@ class RegressionSceneList:
                 self.parsing_error(line_number, f"epsilon must be a number, got '{values[2]}'. "
                                                 f"Expecting: {expected_fields}. Skipping this scene.")
                 return None
-            if epsilon < 0:
-                self.parsing_error(line_number, f"epsilon must be positive, got {epsilon}. "
+            if not math.isfinite(epsilon) or epsilon < 0:
+                self.parsing_error(line_number, f"epsilon must be a finite positive number, got {epsilon}. "
                                                 f"Skipping this scene.")
                 return None
 

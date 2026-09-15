@@ -73,8 +73,8 @@ def run_scene_in_subprocess(scene_data, mode, legacy=False,
     Returns:
         dict: the result reported by the child. Always contains an "ok" key.
               For compare runs it also contains "result", "regression_failed",
-              "nbr_tested_frame", "total_run_time", "error_by_dof" and
-              "total_error".
+              "nbr_tested_frame", "total_run_time", "error_by_dof",
+              "structural_failure" and "total_error".
     """
     python_exe = python_exe or sys.executable
     worker_path = os.path.abspath(__file__)
@@ -305,6 +305,7 @@ def _worker_main():
                 "ok": True,
                 "result": bool(passed),
                 "regression_failed": bool(scene.regression_failed),
+                "structural_failure": bool(scene.structural_failure),
                 "nbr_tested_frame": int(scene.nbr_tested_frame),
                 "total_run_time": int(scene.total_run_time),
                 "error_by_dof": [float(v) for v in scene.error_by_dof],

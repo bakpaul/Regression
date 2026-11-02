@@ -1,5 +1,6 @@
 import os
 import io
+import json # CI-UPDATE-REF
 import argparse
 import sys
 import numpy as np
@@ -20,7 +21,10 @@ import tools.RegressionSceneList as RegressionSceneList
 import tools.RegressionWorker as RegressionWorker
 from tools.RegressionHelper import writeMessage, writeWarning
 
-regression_file_extension = ".regression-tests"
+# >>> CI-UPDATE-REF BEGIN
+import tools.RegressionUtils as RegressionUtils
+regression_file_extension = RegressionUtils.REGRESSION_FILE_EXTENSION
+# <<< CI-UPDATE-REF END
 
 class RegressionProgram:
     def __init__(self, input_folders, filter = None, reg_type = 'ALL',  disable_progress_bar = False, verbose = 1, nbr_jobs = 1, logs_output = None):
@@ -46,26 +50,25 @@ class RegressionProgram:
             err_logs_stream = io.StringIO()
         try:
 
-            for directory in input_folders :
-                for root, dirs, files in os.walk(directory):
-                    for file in files:
-                        file_path = os.path.join(root, file)
+# >>> CI-UPDATE-REF BEGIN
+            for file_path, selected in RegressionUtils.find_regression_files(input_folders, reg_type):
+                file = os.path.basename(file_path)
+                #Warning lazy or in the end, if not lazy then this breaks
+                if selected:
+                    scene_list = RegressionSceneList.RegressionSceneList(file_path, filter, self.disable_progress_bar, verbose, self.nbr_jobs)
 
-                        #Warning lazy or in the end, if not lazy then this breaks
-                        if file.endswith(regression_file_extension) and (reg_type == 'ALL' or RegressionSceneList.RegressionSceneList.RegressionType[reg_type].value[0] in file) :
-                            scene_list = RegressionSceneList.RegressionSceneList(file_path, filter, self.disable_progress_bar, verbose, self.nbr_jobs)
+                    if err_logs_stream is not None:
+                        start_steam_out_size = err_logs_stream.tell()
 
-                            if err_logs_stream is not None:
-                                start_steam_out_size = err_logs_stream.tell()
+                    scene_list.process_file(err_log_stream = err_logs_stream)
 
-                            scene_list.process_file(err_log_stream = err_logs_stream)
+                    if err_logs_stream is not None and start_steam_out_size != err_logs_stream.tell():
+                        print("", file=err_logs_stream)
 
-                            if err_logs_stream is not None and start_steam_out_size != err_logs_stream.tell():
-                                print("", file=err_logs_stream)
-
-                            self.scene_sets.append(scene_list)
-                        elif file.endswith(regression_file_extension):
-                            writeWarning(f"Regression file {file_path} skipped because of selected regression type {reg_type}", self.verbose)
+                    self.scene_sets.append(scene_list)
+                else:
+                    writeWarning(f"Regression file {file_path} skipped because of selected regression type {reg_type}", self.verbose)
+# <<< CI-UPDATE-REF END
 
         finally:
             if self.logs_output is not None :
@@ -90,6 +93,12 @@ class RegressionProgram:
         for scene_list in self.scene_sets:
             nbr_errors = nbr_errors + scene_list.get_nbr_parsing_errors()
         return nbr_errors
+
+# >>> CI-UPDATE-REF BEGIN
+    def failed_scene_paths(self):
+        """Absolute paths of all the scenes that failed or crashed."""
+        return [path for scene_list in self.scene_sets for path in scene_list.failed_scenes]
+# <<< CI-UPDATE-REF END
 
     def log_errors_in_sets(self):
         for scene_list in self.scene_sets:
@@ -230,6 +239,16 @@ def make_parser():
     )
 
 
+# >>> CI-UPDATE-REF BEGIN
+    parser.add_argument(
+        '--export-failed-scenes',
+        dest='export_failed',
+        help="JSON file where to export all the failed scenes, in the `ci-update-ref` format "
+             "({\"sofa\": [\"path/scene.scn\"], \"plugin_name\": [...]}, paths relative to the repository root)",
+        type=str
+    )
+# <<< CI-UPDATE-REF END
+
     parser.epilog = '''
 Examples:
     python SofaRegressionProgram.py --input ./scenes
@@ -311,6 +330,14 @@ if __name__ == '__main__':
             reg_prog.write_summary(summary_file, nbr_scenes, duration_seconds)
 
 
+
+# >>> CI-UPDATE-REF BEGIN
+    if args.export_failed is not None:
+        failed_json = RegressionUtils.failed_scenes_to_update_ref_auto(reg_prog.failed_scene_paths(), args.input)
+        Path(args.export_failed).parent.mkdir(parents=True, exist_ok=True)
+        with open(args.export_failed, 'w', encoding="utf-8") as failed_file:
+            json.dump(failed_json, failed_file, indent=2)
+# <<< CI-UPDATE-REF END
 
     if ( reg_prog.nbr_error_in_sets() > 0) or reg_prog.nbr_parsing_error_in_sets()> 0:
         sys.exit(1) # exit with error(s)

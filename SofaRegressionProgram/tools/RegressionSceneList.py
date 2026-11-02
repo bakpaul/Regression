@@ -3,6 +3,7 @@ import os
 import math
 import tools.RegressionSceneData as RegressionSceneData
 import tools.RegressionHelper as helper
+import tools.RegressionUtils as RegressionUtils # CI-UPDATE-REF
 import tools.RegressionWorker as RegressionWorker
 import sys
 from pathlib import Path
@@ -14,8 +15,8 @@ import re
 class RegressionSceneList:
 
     class RegressionType(Enum):
-        STATE = ("RegressionStateScenes", RegressionSceneData.StateRegressionSceneData)
-        TOPOLOGY = ("RegressionTopologyScenes", RegressionSceneData.TopologyRegressionSceneData)
+        STATE = (RegressionUtils.STATE_PREFIX, RegressionSceneData.StateRegressionSceneData)
+        TOPOLOGY = (RegressionUtils.TOPOLOGY_PREFIX, RegressionSceneData.TopologyRegressionSceneData)
 
 
     def __init__(self, file_path, filter, disable_progress_bar = False, verbose = 1, nbr_jobs = 1):
@@ -46,6 +47,7 @@ class RegressionSceneList:
         self.legacy_mode = False
         self.nbr_jobs = nbr_jobs # number of scenes simulated at the same time
         self.curr_os = helper.get_os()
+        self.failed_scenes = [] # CI-UPDATE-REF: scene paths that failed or crashed
 
 
     ################
@@ -176,7 +178,7 @@ class RegressionSceneList:
                                             err_log_stream = err_log_stream)
             return None
 
-        full_ref_file_path = os.path.normpath(os.path.join(self.ref_dir_path, self.curr_os,  values[0]))
+        full_ref_file_path = RegressionUtils.reference_file_path(self.ref_dir_path, self.curr_os, values[0]) # CI-UPDATE-REF
 
         return self.regression_type.value[1](full_file_path, full_ref_file_path,
                                                        steps, epsilon, meca_in_mapping, dump_number_step,
@@ -200,18 +202,15 @@ class RegressionSceneList:
                 continue
 
             if count == 0:
-                if ("$REGRESSION_DIR" in values[0]): # using environment variable
-                    if ("REGRESSION_DIR" in os.environ):
-                        self.ref_dir_path = values[0].replace("$REGRESSION_DIR", os.environ["REGRESSION_DIR"])
-                    else:
-                        self.parsing_error(line_number, f"the environment variable $REGRESSION_DIR is required but not set. "
-                                                        f"Please set this variable to the root directory of your regression tests to proceed. "
-                                                        f"No scene of this file will be processed.",
-                                                        err_log_stream = err_log_stream)
-                        return
-                else: # direct absolute or relative path
-                    self.ref_dir_path = os.path.join(self.file_dir, values[0])
-                    self.ref_dir_path = os.path.abspath(self.ref_dir_path)
+# >>> CI-UPDATE-REF BEGIN
+                self.ref_dir_path = RegressionUtils.resolve_reference_dir(self.file_path, values[0])
+                if self.ref_dir_path is None:
+                    self.parsing_error(line_number, f"the environment variable $REGRESSION_DIR is required but not set. "
+                                                    f"Please set this variable to the root directory of your regression tests to proceed. "
+                                                    f"No scene of this file will be processed.",
+                                                    err_log_stream = err_log_stream)
+                    return
+# <<< CI-UPDATE-REF END
 
                 if not os.path.isdir(self.ref_dir_path):
                     self.parsing_error(line_number, f"reference directory does not exist: {self.ref_dir_path}. "
@@ -268,6 +267,7 @@ class RegressionSceneList:
             if not result.get("ok", False):
                 helper.writeError(f"While writing references for {scene.file_scene_path}: {result.get('error')}", self.verbose, log_prefix, err_log_stream)
                 self.nbr_crash += 1
+                self.failed_scenes.append(scene.file_scene_path) # CI-UPDATE-REF
             else:
                 helper.writeSuccess(f"Reference {scene.file_ref_path} written successfully !", self.verbose, log_prefix)
             return
@@ -275,6 +275,7 @@ class RegressionSceneList:
         if not result.get("ok", False):
             # Hard failure (scene could not be loaded / worker crashed).
             self.nbr_crash += 1
+            self.failed_scenes.append(scene.file_scene_path) # CI-UPDATE-REF
             helper.writeError(f"While trying to compare {scene.file_scene_path}: {result.get('error')}", self.verbose, log_prefix, err_log_stream)
             return
 
@@ -283,6 +284,7 @@ class RegressionSceneList:
         scene.log_errors(log_prefix,err_log_stream)
         if not result.get("result", False):
             self.nbr_errors = self.nbr_errors + 1
+            self.failed_scenes.append(scene.file_scene_path) # CI-UPDATE-REF
 
 
     def _run_tasks(self, mode, description):

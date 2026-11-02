@@ -45,6 +45,7 @@ class RegressionSceneList:
         self.verbose = verbose
         self.legacy_mode = False
         self.nbr_jobs = nbr_jobs # number of scenes simulated at the same time
+        self.curr_os = helper.get_os()
 
 
     ################
@@ -175,7 +176,7 @@ class RegressionSceneList:
                                             err_log_stream = err_log_stream)
             return None
 
-        full_ref_file_path = os.path.normpath(os.path.join(self.ref_dir_path, values[0]))
+        full_ref_file_path = os.path.normpath(os.path.join(self.ref_dir_path, self.curr_os,  values[0]))
 
         return self.regression_type.value[1](full_file_path, full_ref_file_path,
                                                        steps, epsilon, meca_in_mapping, dump_number_step,

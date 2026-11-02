@@ -1,5 +1,6 @@
 import sys
 from typing import TextIO
+import platform
 
 class TermColor:
     RED = "\033[31m"
@@ -38,3 +39,41 @@ def writeSuccess(message, verbose, prefix=''):
 def writeLog(message, verbose, prefix=''):
     if(verbose >= 2):
         writeMessage(f"{prefix}{TermColor.CYAN}{TermTypeStrings.LOG} {TermColor.ITALIC}{message}{TermColor.RESET}")
+
+
+
+def get_os() -> str:
+    """Return 'ubuntu', 'fedora', 'macos' or 'windows' for the current OS.
+
+    Raises RuntimeError on any other system.
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        return "windows"
+    if system == "Darwin":
+        return "macos"
+    if system == "Linux":
+        info = _read_os_release()
+        ids = {info.get("ID", "")} | set(info.get("ID_LIKE", "").split())
+        if "ubuntu" in ids:
+            return "ubuntu"
+        if "fedora" in ids:
+            return "fedora"
+
+    raise RuntimeError(f"Unsupported OS: {system}")
+
+
+def _read_os_release() -> dict:
+    """Parse /etc/os-release into a dict (empty if unavailable)."""
+    info = {}
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, _, value = line.partition("=")
+                    info[key] = value.strip('"\'')
+    except OSError:
+        pass
+    return info
